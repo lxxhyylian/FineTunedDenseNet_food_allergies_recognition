@@ -21,21 +21,29 @@ import torchvision.models as models
 
 with open('./data/allergies.txt', 'r') as file:
     allergies = [line.strip() for line in file]
-class FineTunedResNet(nn.Module):
+class FineTunedDenseNet(nn.Module):
     def __init__(self, num_classes=len(allergies)):
-        super(FineTunedResNet, self).__init__()
-        resnet = models.resnet18(pretrained=True)
-        self.features = nn.Sequential(*list(resnet.children())[:-1])
-        self.fc = nn.Linear(resnet.fc.in_features, num_classes)
+        super(FineTunedDenseNet, self).__init__()
+        densenet = models.densenet121(pretrained=True)
+        self.features = densenet.features
+        self.conv1x1 = nn.Conv2d(densenet.classifier.in_features, 512, kernel_size=1)
+        self.bn1 = nn.BatchNorm2d(512)
+        self.dropout = nn.Dropout(0.5)
+        self.fc = nn.Linear(512, num_classes)
 
     def forward(self, x):
         x = self.features(x)
+        x = F.adaptive_avg_pool2d(x, (1, 1))
+        x = self.conv1x1(x)
+        x = self.bn1(x)
+        x = F.relu(x, inplace=True)
+        x = self.dropout(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
         return x
 
 def Model():
-    return FineTunedResNet()
+    return FineTunedDenseNet()
 
 model = Model()
 model.load_state_dict(torch.load('./FineTunedDenseNet_allergies_model.pth', map_location='cpu'))
